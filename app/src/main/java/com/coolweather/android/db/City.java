@@ -12,7 +12,7 @@ public class City extends DataSupport {
     //市名
     private String cityName;
     //市代号
-    private String cityCode;
+    private int cityCode;
     //市所属省id
     private int provinceId;
 
@@ -32,11 +32,11 @@ public class City extends DataSupport {
         this.cityName = cityName;
     }
 
-    public String getCityCode() {
+    public int getCityCode() {
         return cityCode;
     }
 
-    public void setCityCode(String cityCode) {
+    public void setCityCode(int cityCode) {
         this.cityCode = cityCode;
     }
 
