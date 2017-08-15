@@ -92,6 +92,9 @@ public class Utility {
         return false;
     }
 
+    /**
+     * 用GSON解析JSON天气数据
+     */
     public static HeWeather5 handleWeatherResponse(String response){
         try {
             if (!TextUtils.isEmpty(response)) {
