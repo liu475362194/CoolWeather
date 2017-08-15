@@ -6,6 +6,8 @@ import android.util.Log;
 import com.coolweather.android.db.City;
 import com.coolweather.android.db.County;
 import com.coolweather.android.db.Province;
+import com.coolweather.android.gson.HeWeather5;
+import com.google.gson.Gson;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -77,6 +79,7 @@ public class Utility {
                     JSONObject countyObject = allCounties.getJSONObject(i);
                     County county = new County();
                     county.setCountyName(countyObject.getString("name"));
+                    county.setWeatherId(countyObject.getString("weather_id"));
                     county.setCountyCode(countyObject.getInt("id"));
                     county.setCityId(cityId);
                     county.save();
@@ -89,5 +92,18 @@ public class Utility {
         return false;
     }
 
-
+    public static HeWeather5 handleWeatherResponse(String response){
+        try {
+            if (!TextUtils.isEmpty(response)) {
+                JSONObject jsonObject = new JSONObject(response);
+                JSONArray jsonArray = jsonObject.getJSONArray("HeWeather5");
+                String weatherContent = jsonArray.getJSONObject(0).toString();
+                Log.d(TAG, "handleWeatherResponse: " + weatherContent);
+                return new Gson().fromJson(weatherContent, HeWeather5.class);
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
 }
