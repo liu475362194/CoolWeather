@@ -3,6 +3,8 @@ package com.coolweather.android;
 import android.Manifest;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.os.Build;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -12,6 +14,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -22,6 +25,7 @@ import com.baidu.location.BDLocationListener;
 import com.baidu.location.LocationClient;
 import com.baidu.location.LocationClientOption;
 import com.baidu.mapapi.SDKInitializer;
+import com.bumptech.glide.Glide;
 import com.coolweather.android.gson.DailyForecast;
 import com.coolweather.android.gson.HeWeather5;
 import com.coolweather.android.util.HttpUtil;
@@ -69,6 +73,8 @@ public class WeatherActivity extends AppCompatActivity {
 
     private TextView suggestionDrsg;
 
+    private ImageView bingPicImg;
+
     private LocationClient locationClient;
 
     public static final String WEATHER_URL = "https://free-api.heweather.com/v5/weather?key=cd83db70d0ba468a8486a906fee14faf&city=";
@@ -91,15 +97,67 @@ public class WeatherActivity extends AppCompatActivity {
         setContentView(R.layout.activity_weather);
         initView();
         initPermission();
+        loadBingPic();
+
+        /**
+         * 状态栏透明
+         */
+        if (Build.VERSION.SDK_INT >= 21){
+            View decorView = getWindow().getDecorView();
+            decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            getWindow().setStatusBarColor(Color.TRANSPARENT);
+        }
+    }
+
+    private void findPreferencesText() {
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
         String weatherText = preferences.getString("weather",null);
+        String bingPic = preferences.getString("bing_pic",null);
+        String dateLast = preferences.getString("date_last",null);
+
+        if (null != bingPic){
+            Glide.with(this).load(bingPic).into(bingPicImg);
+        }else{
+            loadBingPic();
+        }
         if (preferences.getBoolean("havePreferences",false)){
             HeWeather5 weather = Utility.handleWeatherResponse(weatherText);
             showWeatherInfo(weather);
+            if (!dateLast.equals(weather.dailyForecast.get(0).date.toString())){
+                Log.d(TAG, "findPreferencesText: dateLast != weather.dailyForecast.get(0).date" + dateLast + "," + weather.dailyForecast.get(0).date);
+                loadBingPic();
+            }else{
+                Glide.with(this).load(bingPic).into(bingPicImg);
+            }
         } else {
             requestLocation();
         }
+    }
 
+    private void loadBingPic(){
+        String requestBingPic = "http://guolin.tech/api/bing_pic";
+        Log.d(TAG, "loadBingPic: ");
+        HttpUtil.sendOkHttpRequest(requestBingPic, new Callback() {
+            @Override
+            public void onFailure(Call call, IOException e) {
+
+            }
+
+            @Override
+            public void onResponse(Call call, final Response response) throws IOException {
+                final String responseTxt = response.body().string();
+                SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
+                editor.putString("bing_pic",responseTxt);
+                editor.apply();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Glide.with(WeatherActivity.this).load(responseTxt).into(bingPicImg);
+                    }
+                });
+            }
+        });
     }
 
     /**
@@ -124,17 +182,11 @@ public class WeatherActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(WeatherActivity.this, permissions, 1);
 
         } else {
-            SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(this);
-            String weatherText = preferences.getString("weather",null);
-            if (preferences.getBoolean("havePreferences",false)){
-                HeWeather5 weather = Utility.handleWeatherResponse(weatherText);
-                showWeatherInfo(weather);
-            } else {
-                requestLocation();
-            }
+            findPreferencesText();
         }
     }
 
+//    百度地图位置监听
     public class MyLocationListener implements BDLocationListener {
 
         @Override
@@ -143,6 +195,7 @@ public class WeatherActivity extends AppCompatActivity {
             //.getLatitude();//经度
             //bdLocation.getLongitude();//纬度
             localtion = bdLocation.getLatitude() + "," + bdLocation.getLongitude();
+            Log.d(TAG, "onReceiveLocation: localtion" + localtion);
             requestWeather();
         }
 
@@ -186,6 +239,11 @@ public class WeatherActivity extends AppCompatActivity {
                         SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
                         editor.putString("weather",responseTxt);
                         editor.putBoolean("havePreferences",true);
+                        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this);
+                        if (null == preferences.getString("date_last",null)) {
+                            Log.d(TAG, "run: first add date_last");
+                            editor.putString("date_last", weather.dailyForecast.get(0).date);
+                        }
                         editor.apply();
                         showWeatherInfo(weather);
                     } else {
@@ -213,6 +271,7 @@ public class WeatherActivity extends AppCompatActivity {
         suggestionComf = (TextView) findViewById(R.id.suggestion_comf_text);
         suggestionCw = (TextView) findViewById(R.id.suggestion_cw_text);
         suggestionDrsg = (TextView) findViewById(R.id.suggestion_drsg_text);
+        bingPicImg = (ImageView) findViewById(R.id.bing_pic_img);
     }
 
     /**
@@ -220,6 +279,7 @@ public class WeatherActivity extends AppCompatActivity {
      * @param weather
      */
     private void showWeatherInfo(HeWeather5 weather){
+        Log.d(TAG, "showWeatherInfo: ");
         titleCity.setText(weather.basic.city);
         titleUpdateTime.setText(weather.basic.update.loc);
         nowTmpText.setText(weather.now.tmp);
@@ -256,7 +316,7 @@ public class WeatherActivity extends AppCompatActivity {
                             finish();
                         }
                     }
-                    requestLocation();
+                    findPreferencesText();
                 } else {
                     Toast.makeText(WeatherActivity.this, "未知错误", Toast.LENGTH_SHORT).show();
                     finish();
