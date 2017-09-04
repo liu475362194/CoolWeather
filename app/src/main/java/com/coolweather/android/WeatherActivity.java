@@ -15,18 +15,17 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
-import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.baidu.location.BDAbstractLocationListener;
-import com.baidu.location.BDLocation;
-import com.baidu.location.BDLocationListener;
-import com.baidu.location.LocationClient;
-import com.baidu.location.LocationClientOption;
+
+import com.amap.api.location.AMapLocation;
+import com.amap.api.location.AMapLocationClient;
+import com.amap.api.location.AMapLocationClientOption;
+import com.amap.api.location.AMapLocationListener;
 import com.bumptech.glide.Glide;
 import com.coolweather.android.gson.DailyForecast;
 import com.coolweather.android.gson.HeWeather5;
@@ -71,13 +70,15 @@ public class WeatherActivity extends AppCompatActivity {
 
     private ImageView bingPicImg;
 
-    private LocationClient locationClient;
-
-    public BDAbstractLocationListener myListener = new MyLocationListener();
+    //声明AMapLocationClient类对象
+    public AMapLocationClient locationClient = null;
+    private AMapLocationClientOption locationOption = null;
 
     public static final String WEATHER_URL = "https://free-api.heweather.com/v5/weather?key=cd83db70d0ba468a8486a906fee14faf&city=";
 
     private String weatherId;
+
+    private String poiName = "";
 
     private String location;
 
@@ -87,10 +88,9 @@ public class WeatherActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        locationClient = new LocationClient(getApplicationContext());
-        locationClient.registerLocationListener(new MyLocationListener());
-
         setContentView(R.layout.activity_weather);
+
+        initLocation();
         initView();
         initPermission();
         loadBingPic();
@@ -108,6 +108,56 @@ public class WeatherActivity extends AppCompatActivity {
     }
 
     /**
+     * 初始化定位
+     *
+     * @since 2.8.0
+     * @author hongming.wang
+     *
+     */
+    private void initLocation(){
+        //初始化client
+        locationClient = new AMapLocationClient(this.getApplicationContext());
+        locationOption = getDefaultOption();
+        //设置定位参数
+        locationClient.setLocationOption(locationOption);
+        // 设置定位监听
+        locationClient.setLocationListener(locationListener);
+    }
+
+    /**
+     * 默认的定位参数
+     * @since 2.8.0
+     * @author hongming.wang
+     *
+     */
+    private AMapLocationClientOption getDefaultOption(){
+        AMapLocationClientOption mOption = new AMapLocationClientOption();
+        mOption.setLocationMode(AMapLocationClientOption.AMapLocationMode.Hight_Accuracy);//可选，设置定位模式，可选的模式有高精度、仅设备、仅网络。默认为高精度模式
+        mOption.setGpsFirst(false);//可选，设置是否gps优先，只在高精度模式下有效。默认关闭
+        mOption.setHttpTimeOut(30000);//可选，设置网络请求超时时间。默认为30秒。在仅设备模式下无效
+//        mOption.setInterval(2000);//可选，设置定位间隔。默认为2秒
+//        mOption.setNeedAddress(true);//可选，设置是否返回逆地理地址信息。默认是true
+        mOption.setOnceLocation(true);//可选，设置是否单次定位。默认是false
+//        mOption.setOnceLocationLatest(false);//可选，设置是否等待wifi刷新，默认为false.如果设置为true,会自动变为单次定位，持续定位时不要使用
+        AMapLocationClientOption.setLocationProtocol(AMapLocationClientOption.AMapLocationProtocol.HTTP);//可选， 设置网络请求的协议。可选HTTP或者HTTPS。默认为HTTP
+//        mOption.setSensorEnable(false);//可选，设置是否使用传感器。默认是false
+        mOption.setWifiScan(true); //可选，设置是否开启wifi扫描。默认为true，如果设置为false会同时停止主动刷新，停止以后完全依赖于系统刷新，定位位置可能存在误差
+        mOption.setLocationCacheEnable(true); //可选，设置是否使用缓存定位，默认为true
+        return mOption;
+    }
+
+    AMapLocationListener locationListener = new AMapLocationListener() {
+        @Override
+        public void onLocationChanged(AMapLocation aMapLocation) {
+            if (null != aMapLocation){
+                location = aMapLocation.getLongitude() + "," + aMapLocation.getLatitude();
+                poiName = aMapLocation.getPoiName();
+                requestWeather();
+            }
+        }
+    };
+
+    /**
      * 寻找缓存的天气数据
      */
     private void findPreferencesText() {
@@ -115,6 +165,7 @@ public class WeatherActivity extends AppCompatActivity {
         String weatherText = preferences.getString("weather", null);
         String bingPic = preferences.getString("bing_pic", null);
         String dateLast = preferences.getString("date_last", null);
+        poiName = preferences.getString("poiName","");
 
         if (null != bingPic) {
             Glide.with(this).load(bingPic).into(bingPicImg);
@@ -172,6 +223,10 @@ public class WeatherActivity extends AppCompatActivity {
         });
     }
 
+    private void requestLocation(){
+        locationClient.startLocation();
+    }
+
     /**
      * 获取多个权限
      */
@@ -198,52 +253,9 @@ public class WeatherActivity extends AppCompatActivity {
         }
     }
 
-    private void initLocation(){
-        LocationClientOption option = new LocationClientOption();
-        option.setCoorType("gcj02");
-        option.setLocationMode(LocationClientOption.LocationMode.Hight_Accuracy);
-//        option.setOpenGps(true);
-//        int span=1000;
-//        option.setScanSpan(span);
-        //可选，默认0，即仅定位一次，设置发起定位请求的间隔需要大于等于1000ms才是有效的
-        locationClient.setLocOption(option);
-    }
-
-    /**
-     * 查询地址
-     */
-    private void requestLocation() {
-        initLocation();
-        if (locationClient.isStarted()){
-            locationClient.restart();
-        }else{
-            locationClient.start();
-        }
 
 
-    }
 
-    /**
-     * 百度地图位置监听
-     */
-    public class MyLocationListener extends BDAbstractLocationListener {
-
-        @Override
-        public void onReceiveLocation(BDLocation bdLocation) {
-
-            //.getLatitude();//经度
-            //bdLocation.getLongitude();//纬度
-            location = bdLocation.getLatitude() + "," + bdLocation.getLongitude();
-            Log.d(TAG, "onReceiveLocation: localtion" + location);
-            requestWeather();
-
-        }
-
-        @Override
-        public void onConnectHotSpotMessage(String s, int i) {
-
-        }
-    }
 
     /**
      * 根据weatherId网络查询天气
@@ -274,6 +286,7 @@ public class WeatherActivity extends AppCompatActivity {
                             SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
                             editor.putString("weather", responseTxt);
                             editor.putBoolean("havePreferences", true);
+                            editor.putString("poiName", poiName);
                             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this);
                             if (null == preferences.getString("date_last", null)) {
                                 Log.d(TAG, "run: first add date_last");
@@ -285,7 +298,6 @@ public class WeatherActivity extends AppCompatActivity {
                             Toast.makeText(WeatherActivity.this, "获取天气失败", Toast.LENGTH_SHORT).show();
                         }
                         swipeRefresh.setRefreshing(false);
-                        locationClient.stop();
                     }
                 });
             }
@@ -319,7 +331,7 @@ public class WeatherActivity extends AppCompatActivity {
      */
     private void showWeatherInfo(HeWeather5 weather) {
         Log.d(TAG, "showWeatherInfo: ");
-        titleCity.setText(weather.basic.city);
+        titleCity.setText(poiName);
         swipeRefresh.setColorSchemeColors(Color.RED, Color.GREEN, Color.BLUE);
 //        titleUpdateTime.setText(weather.basic.update.loc);
         nowTmpText.setText(weather.now.tmp);
@@ -365,6 +377,28 @@ public class WeatherActivity extends AppCompatActivity {
                     Toast.makeText(WeatherActivity.this, "未知错误", Toast.LENGTH_SHORT).show();
                     finish();
                 }
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        destroyLocation();
+    }
+
+    /**
+     * 销毁定位
+     *
+     */
+    private void destroyLocation(){
+        if (null != locationClient) {
+            /**
+             * 如果AMapLocationClient是在当前Activity实例化的，
+             * 在Activity的onDestroy中一定要执行AMapLocationClient的onDestroy
+             */
+            locationClient.onDestroy();
+            locationClient = null;
+            locationOption = null;
         }
     }
 }
