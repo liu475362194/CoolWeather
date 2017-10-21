@@ -15,24 +15,31 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content" />
 
-    <TextView
-        android:id="@+id/suggestion_comf_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="15dp"
-        android:textColor="#fff"/>
+    <!--<TextView-->
+        <!--android:id="@+id/suggestion_comf_text"-->
+        <!--android:layout_width="wrap_content"-->
+        <!--android:layout_height="wrap_content"-->
+        <!--android:layout_margin="15dp"-->
+        <!--android:textColor="#fff"/>-->
 
-    <TextView
-        android:id="@+id/suggestion_cw_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="15dp"
-        android:textColor="#fff"/>
+    <!--<TextView-->
+        <!--android:id="@+id/suggestion_cw_text"-->
+        <!--android:layout_width="wrap_content"-->
+        <!--android:layout_height="wrap_content"-->
+        <!--android:layout_margin="15dp"-->
+        <!--android:textColor="#fff"/>-->
 
-    <TextView
-        android:id="@+id/suggestion_drsg_text"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_margin="15dp"
-        android:textColor="#fff"/>
+    <!--<TextView-->
+        <!--android:id="@+id/suggestion_drsg_text"-->
+        <!--android:layout_width="wrap_content"-->
+        <!--android:layout_height="wrap_content"-->
+        <!--android:layout_margin="15dp"-->
+        <!--android:textColor="#fff"/>-->
+    <LinearLayout
+        android:id="@+id/suggestion_layout"
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+    </LinearLayout>
 </LinearLayout>

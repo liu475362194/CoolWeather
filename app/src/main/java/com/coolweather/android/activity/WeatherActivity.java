@@ -1,6 +1,10 @@
-package com.coolweather.android;
+package com.coolweather.android.activity;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -9,6 +13,7 @@ import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v4.content.LocalBroadcastManager;
 import android.support.v4.widget.SwipeRefreshLayout;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -27,10 +32,15 @@ import com.amap.api.location.AMapLocationClient;
 import com.amap.api.location.AMapLocationClientOption;
 import com.amap.api.location.AMapLocationListener;
 import com.bumptech.glide.Glide;
-import com.coolweather.android.gson.DailyForecast;
-import com.coolweather.android.gson.HeWeather5;
+import com.coolweather.android.R;
+import com.coolweather.android.db.SaveCity;
+import com.coolweather.android.gson.Weather5;
 import com.coolweather.android.util.HttpUtil;
 import com.coolweather.android.util.Utility;
+import com.google.gson.Gson;
+
+import org.litepal.crud.DataSupport;
+import org.w3c.dom.Text;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -40,7 +50,7 @@ import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Response;
 
-public class WeatherActivity extends AppCompatActivity {
+public class WeatherActivity extends AppCompatActivity implements View.OnClickListener {
 
     private ScrollView weatherScroll;
 
@@ -62,11 +72,13 @@ public class WeatherActivity extends AppCompatActivity {
 
     private TextView pm25Text;
 
-    private TextView suggestionComf;
+//    private TextView suggestionComf;
+//
+//    private TextView suggestionCw;
+//
+//    private TextView suggestionDrsg;
 
-    private TextView suggestionCw;
-
-    private TextView suggestionDrsg;
+    private LinearLayout suggestionLayout;
 
     private ImageView bingPicImg;
 
@@ -82,16 +94,23 @@ public class WeatherActivity extends AppCompatActivity {
 
     private String location;
 
+    private LocalBroadcastManager broadcastManager;
+
+    private LocalReceiver localReceiver;
+
+    private boolean isLocation = true;
+
     private static final String TAG = "WeatherActivity";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         setContentView(R.layout.activity_weather);
+        Log.d(TAG, "onCreate: ");
 
         initLocation();
         initView();
+        initOnClickListener();
         initPermission();
         loadBingPic();
         updateWeather();
@@ -105,16 +124,37 @@ public class WeatherActivity extends AppCompatActivity {
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
             getWindow().setStatusBarColor(Color.TRANSPARENT);
         }
+
+        broadcastManager = LocalBroadcastManager.getInstance(this);
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction("com.coolweather.android.weather.id");
+        localReceiver = new LocalReceiver();
+        broadcastManager.registerReceiver(localReceiver, intentFilter);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        Log.d(TAG, "onStart: ");
+//        String weatherId = getIntent().getStringExtra("weatherId");
+//        Log.d(TAG, "onStart: " + weatherId);
+//        if (null != weatherId) {
+//            location = weatherId;
+//            requestWeather();
+//
+//        }
+    }
+
+    @Override
+    protected void onRestart() {
+        super.onRestart();
+        Log.d(TAG, "onRestart: ");
     }
 
     /**
      * 初始化定位
-     *
-     * @since 2.8.0
-     * @author hongming.wang
-     *
      */
-    private void initLocation(){
+    private void initLocation() {
         //初始化client
         locationClient = new AMapLocationClient(this.getApplicationContext());
         locationOption = getDefaultOption();
@@ -125,12 +165,20 @@ public class WeatherActivity extends AppCompatActivity {
     }
 
     /**
-     * 默认的定位参数
-     * @since 2.8.0
-     * @author hongming.wang
-     *
+     * 初始化组件的点击监听
      */
-    private AMapLocationClientOption getDefaultOption(){
+    private void initOnClickListener() {
+        chooseCity.setOnClickListener(this);
+        titleCity.setOnClickListener(this);
+    }
+
+    /**
+     * 默认的定位参数
+     *
+     * @author hongming.wang
+     * @since 2.8.0
+     */
+    private AMapLocationClientOption getDefaultOption() {
         AMapLocationClientOption mOption = new AMapLocationClientOption();
         mOption.setLocationMode(AMapLocationClientOption.AMapLocationMode.Hight_Accuracy);//可选，设置定位模式，可选的模式有高精度、仅设备、仅网络。默认为高精度模式
         mOption.setGpsFirst(false);//可选，设置是否gps优先，只在高精度模式下有效。默认关闭
@@ -146,10 +194,13 @@ public class WeatherActivity extends AppCompatActivity {
         return mOption;
     }
 
+    /**
+     * 高德定位监听器
+     */
     AMapLocationListener locationListener = new AMapLocationListener() {
         @Override
         public void onLocationChanged(AMapLocation aMapLocation) {
-            if (null != aMapLocation){
+            if (null != aMapLocation) {
                 location = aMapLocation.getLongitude() + "," + aMapLocation.getLatitude();
                 poiName = aMapLocation.getPoiName();
                 requestWeather();
@@ -165,7 +216,7 @@ public class WeatherActivity extends AppCompatActivity {
         String weatherText = preferences.getString("weather", null);
         String bingPic = preferences.getString("bing_pic", null);
         String dateLast = preferences.getString("date_last", null);
-        poiName = preferences.getString("poiName","");
+        poiName = preferences.getString("poiName", "");
 
         if (null != bingPic) {
             Glide.with(this).load(bingPic).into(bingPicImg);
@@ -173,10 +224,12 @@ public class WeatherActivity extends AppCompatActivity {
             loadBingPic();
         }
         if (preferences.getBoolean("havePreferences", false)) {
-            HeWeather5 weather = Utility.handleWeatherResponse(weatherText);
+//            HeWeather5 weather = Utility.handleWeatherResponse(weatherText);
+            Weather5 weather = new Gson().fromJson(weatherText, Weather5.class);
             showWeatherInfo(weather);
-            if (!dateLast.equals(weather.dailyForecast.get(0).date.toString())) {
-                Log.d(TAG, "findPreferencesText: dateLast != weather.dailyForecast.get(0).date" + dateLast + "," + weather.dailyForecast.get(0).date);
+            if (!dateLast.equals(weather.getHeWeather5().get(0).getDaily_forecast().get(0).getDate().toString())) {
+                Log.d(TAG, "findPreferencesText: dateLast != weather.dailyForecast.get(0).date" +
+                        dateLast + "," + weather.getHeWeather5().get(0).getDaily_forecast().get(0).getDate());
                 loadBingPic();
             } else {
                 Glide.with(this).load(bingPic).into(bingPicImg);
@@ -214,16 +267,23 @@ public class WeatherActivity extends AppCompatActivity {
         });
     }
 
-    private void updateWeather(){
+    /**
+     * 下拉刷新
+     */
+    private void updateWeather() {
         swipeRefresh.setOnRefreshListener(new SwipeRefreshLayout.OnRefreshListener() {
             @Override
             public void onRefresh() {
+                isLocation = true;
                 requestLocation();
             }
         });
     }
 
-    private void requestLocation(){
+    /**
+     * 开启定位
+     */
+    private void requestLocation() {
         locationClient.startLocation();
     }
 
@@ -254,9 +314,6 @@ public class WeatherActivity extends AppCompatActivity {
     }
 
 
-
-
-
     /**
      * 根据weatherId网络查询天气
      */
@@ -278,11 +335,13 @@ public class WeatherActivity extends AppCompatActivity {
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 final String responseTxt = response.body().string();
-                final HeWeather5 weather = Utility.handleWeatherResponse(responseTxt);
+//                final HeWeather5 weather = Utility.handleWeatherResponse(responseTxt);
+                Gson gson = new Gson();
+                final Weather5 weather = gson.fromJson(responseTxt, Weather5.class);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        if (weather != null && "ok".equals(weather.status)) {
+                        if (weather != null && "ok".equals(weather.getHeWeather5().get(0).getStatus())) {
                             SharedPreferences.Editor editor = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this).edit();
                             editor.putString("weather", responseTxt);
                             editor.putBoolean("havePreferences", true);
@@ -290,10 +349,13 @@ public class WeatherActivity extends AppCompatActivity {
                             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(WeatherActivity.this);
                             if (null == preferences.getString("date_last", null)) {
                                 Log.d(TAG, "run: first add date_last");
-                                editor.putString("date_last", weather.dailyForecast.get(0).date);
+                                editor.putString("date_last", weather.getHeWeather5().get(0).getDaily_forecast().get(0).getDate());
                             }
                             editor.apply();
                             showWeatherInfo(weather);
+                            if (isLocation) {
+                                locationClient.stopLocation();
+                            }
                         } else {
                             Toast.makeText(WeatherActivity.this, "获取天气失败", Toast.LENGTH_SHORT).show();
                         }
@@ -318,47 +380,84 @@ public class WeatherActivity extends AppCompatActivity {
         dailyForecastLayout = (LinearLayout) findViewById(R.id.daily_forecast_layout);
         aqiText = (TextView) findViewById(R.id.aqi_aqi_text);
         pm25Text = (TextView) findViewById(R.id.aqi_pm25_text);
-        suggestionComf = (TextView) findViewById(R.id.suggestion_comf_text);
-        suggestionCw = (TextView) findViewById(R.id.suggestion_cw_text);
-        suggestionDrsg = (TextView) findViewById(R.id.suggestion_drsg_text);
+//        suggestionComf = (TextView) findViewById(R.id.suggestion_comf_text);
+//        suggestionCw = (TextView) findViewById(R.id.suggestion_cw_text);
+//        suggestionDrsg = (TextView) findViewById(R.id.suggestion_drsg_text);
+        suggestionLayout = (LinearLayout) findViewById(R.id.suggestion_layout);
         bingPicImg = (ImageView) findViewById(R.id.bing_pic_img);
     }
+
 
     /**
      * 更新所有组件内容
      *
      * @param weather
      */
-    private void showWeatherInfo(HeWeather5 weather) {
+    private void showWeatherInfo(Weather5 weather) {
         Log.d(TAG, "showWeatherInfo: ");
-        titleCity.setText(poiName);
+        if (isLocation) {
+            titleCity.setText(poiName);
+        } else {
+            titleCity.setText(weather.getHeWeather5().get(0).getBasic().getCity());
+        }
+
         swipeRefresh.setColorSchemeColors(Color.RED, Color.GREEN, Color.BLUE);
 //        titleUpdateTime.setText(weather.basic.update.loc);
-        nowTmpText.setText(weather.now.tmp);
-        nowTxtText.setText(weather.now.cond.txt);
-        if (dailyForecastLayout.getChildCount()>0) {
+        nowTmpText.setText(weather.getHeWeather5().get(0).getNow().getTmp());
+        nowTxtText.setText(weather.getHeWeather5().get(0).getNow().getCond().getTxt());
+        if (dailyForecastLayout.getChildCount() > 0) {
             //解决出现重复日期的问题
             dailyForecastLayout.removeViews(0, 3);
         }
-        for (DailyForecast dailyForecast : weather.dailyForecast) {
+        for (Weather5.HeWeather5Bean.DailyForecastBean dailyForecast : weather.getHeWeather5().get(0).getDaily_forecast()) {
             View view = LayoutInflater.from(this).inflate(R.layout.daily_forecast_item, dailyForecastLayout, false);
             TextView dailyForecastDate = view.findViewById(R.id.daily_forecast_date);
             TextView dailyForecastMax = view.findViewById(R.id.daily_forecast_max);
             TextView dailyForecastMin = view.findViewById(R.id.daily_forecast_min);
             TextView dailyForecastTxtD = view.findViewById(R.id.daily_forecast_txt_d);
-            dailyForecastDate.setText(dailyForecast.date);
-            dailyForecastMax.setText(dailyForecast.tmp.max);
-            dailyForecastMin.setText(dailyForecast.tmp.min);
-            dailyForecastTxtD.setText(dailyForecast.cond.txt_d);
+            dailyForecastDate.setText(dailyForecast.getDate());
+            dailyForecastMax.setText(dailyForecast.getTmp().getMax());
+            dailyForecastMin.setText(dailyForecast.getTmp().getMin());
+            dailyForecastTxtD.setText(dailyForecast.getCond().getTxt_d());
             dailyForecastLayout.addView(view);
         }
-        if (weather.aqi != null) {
-            aqiText.setText(weather.aqi.city.aqi);
-            pm25Text.setText(weather.aqi.city.pm25);
+        if (weather.getHeWeather5().get(0).getAqi() != null) {
+            aqiText.setText(weather.getHeWeather5().get(0).getAqi().getCity().getAqi());
+            pm25Text.setText(weather.getHeWeather5().get(0).getAqi().getCity().getPm25());
         }
-        suggestionComf.setText("舒适度：" + weather.suggestion.comf.txt);
-        suggestionCw.setText("洗车指数：" + weather.suggestion.cw.txt);
-        suggestionDrsg.setText("感觉：" + weather.suggestion.drsg.txt);
+        Weather5.HeWeather5Bean.SuggestionBean suggestion = weather.getHeWeather5().get(0).getSuggestion();
+        String[] suggestions = {"舒适度：" + suggestion.getComf().getTxt(), "洗车指数：" + suggestion.getCw().getTxt(),
+                "穿衣：" + suggestion.getDrsg().getTxt(), "感冒：" + suggestion.getFlu().getTxt(),
+                "运动：" + suggestion.getSport().getTxt(), "旅游：" + suggestion.getTrav().getTxt(),
+                "紫外线：" + suggestion.getUv().getTxt()};
+        if (suggestionLayout.getChildCount() > 0) {
+            //解决出现重复日期的问题
+            suggestionLayout.removeViews(0, 7);
+        }
+        for (String str : suggestions) {
+            View view = LayoutInflater.from(this).inflate(R.layout.suggestion_item, suggestionLayout, false);
+            TextView suggestText = view.findViewById(R.id.suggestion_text);
+            suggestText.setText(str);
+            suggestionLayout.addView(view);
+        }
+        addSaveCity(weather);
+//        suggestionComf.setText("舒适度：" + suggestion.getComf().getTxt());
+//        suggestionCw.setText("洗车指数：" + suggestion.getCw().getTxt());
+//        suggestionDrsg.setText("感觉：" + suggestion.getDrsg().getTxt());
+
+    }
+
+    private void addSaveCity(Weather5 weather) {
+        List<SaveCity> saveCityList = DataSupport.where("city = ?", weather.getHeWeather5().get(0).getBasic().getCity()).find(SaveCity.class);
+        Log.d(TAG, "addSaveCity: saveCityList.size(): " + saveCityList.size());
+        if (saveCityList.size() <= 0) {
+            SaveCity saveCity = new SaveCity();
+            saveCity.setCity(weather.getHeWeather5().get(0).getBasic().getCity());
+            saveCity.setWeather(Integer.valueOf(weather.getHeWeather5().get(0).getNow().getTmp()));
+            saveCity.setWeatherTxt(weather.getHeWeather5().get(0).getNow().getCond().getTxt());
+            saveCity.setTime(weather.getHeWeather5().get(0).getDaily_forecast().get(0).getDate());
+            saveCity.save();
+        }
     }
 
     @Override
@@ -388,9 +487,8 @@ public class WeatherActivity extends AppCompatActivity {
 
     /**
      * 销毁定位
-     *
      */
-    private void destroyLocation(){
+    private void destroyLocation() {
         if (null != locationClient) {
             /**
              * 如果AMapLocationClient是在当前Activity实例化的，
@@ -399,6 +497,33 @@ public class WeatherActivity extends AppCompatActivity {
             locationClient.onDestroy();
             locationClient = null;
             locationOption = null;
+        }
+    }
+
+    @Override
+    public void onClick(View view) {
+        switch (view.getId()) {
+            case R.id.title_city:
+                Intent intent = new Intent(WeatherActivity.this, MainActivity.class);
+                startActivity(intent);
+//                finish();
+                break;
+            case R.id.choose_city:
+                Intent intent1 = new Intent(WeatherActivity.this, CityActivity
+                        .class);
+                startActivity(intent1);
+        }
+    }
+
+    class LocalReceiver extends BroadcastReceiver {
+
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String weatherId = intent.getStringExtra("weatherId");
+            Toast.makeText(WeatherActivity.this, "接收到广播" + weatherId, Toast.LENGTH_SHORT).show();
+            location = weatherId;
+            isLocation = false;
+            requestWeather();
         }
     }
 }

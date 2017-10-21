@@ -6,7 +6,7 @@ import android.util.Log;
 import com.coolweather.android.db.City;
 import com.coolweather.android.db.County;
 import com.coolweather.android.db.Province;
-import com.coolweather.android.gson.HeWeather5;
+import com.coolweather.android.gson.Weather5;
 import com.google.gson.Gson;
 
 import org.json.JSONArray;
@@ -96,18 +96,18 @@ public class Utility {
     /**
      * 用GSON解析JSON天气数据
      */
-    public static HeWeather5 handleWeatherResponse(String response) {
-        try {
-            if (!TextUtils.isEmpty(response)) {
-                JSONObject jsonObject = new JSONObject(response);
-                JSONArray jsonArray = jsonObject.getJSONArray("HeWeather5");
-                String weatherContent = jsonArray.getJSONObject(0).toString();
-                Log.d(TAG, "handleWeatherResponse: " + weatherContent);
-                return new Gson().fromJson(weatherContent, HeWeather5.class);
-            }
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-        return null;
-    }
+//    public static Weather5 handleWeatherResponse(String response) {
+//        try {
+//            if (!TextUtils.isEmpty(response)) {
+//                JSONObject jsonObject = new JSONObject(response);
+//                JSONArray jsonArray = jsonObject.getJSONArray("HeWeather5");
+//                String weatherContent = jsonArray.getJSONObject(0).toString();
+//                Log.d(TAG, "handleWeatherResponse: " + weatherContent);
+//                return new Gson().fromJson(response, Weather5.class);
+//            }
+//        } catch (JSONException e) {
+//            e.printStackTrace();
+//        }
+//        return null;
+//    }
 }

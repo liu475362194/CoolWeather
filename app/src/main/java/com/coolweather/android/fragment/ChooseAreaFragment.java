@@ -1,10 +1,11 @@
-package com.coolweather.android.Fragment;
+package com.coolweather.android.fragment;
 
 import android.app.ProgressDialog;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.support.v4.content.LocalBroadcastManager;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -17,7 +18,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.coolweather.android.R;
-import com.coolweather.android.WeatherActivity;
 import com.coolweather.android.db.City;
 import com.coolweather.android.db.County;
 import com.coolweather.android.db.Province;
@@ -77,7 +77,9 @@ public class ChooseAreaFragment extends Fragment {
 
     private ProgressDialog progressDialog;
 
-        public static final String ADDRESS = "http://guolin.tech/api/china";
+    public static final String ADDRESS = "http://guolin.tech/api/china";
+
+    private LocalBroadcastManager broadcastManager;
 
     @Nullable
     @Override
@@ -88,6 +90,7 @@ public class ChooseAreaFragment extends Fragment {
         listView = view.findViewById(R.id.list_view);
         adapter = new ArrayAdapter<String>(getContext(), android.R.layout.simple_list_item_1, dataList);
         listView.setAdapter(adapter);
+        broadcastManager = LocalBroadcastManager.getInstance(getActivity());
         return view;
     }
 
@@ -105,9 +108,13 @@ public class ChooseAreaFragment extends Fragment {
                     selectedCity = cityList.get(i);
                     queryCounties();
                 } else if (currentLevel == LEVEL_COUNTY) {
-                    Intent intent = new Intent(getContext(), WeatherActivity.class);
-                    intent.putExtra("weatherId",countyList.get(i).getWeatherId());
-                    startActivity(intent);
+//                    Intent intent = new Intent(getContext(), WeatherActivity.class);
+//                    intent.putExtra("weatherId", countyList.get(i).getWeatherId());
+//                    startActivity(intent);
+                    Intent intent = new Intent("com.coolweather.android.weather.id");
+                    intent.putExtra("weatherId", countyList.get(i).getWeatherId());
+                    broadcastManager.sendBroadcast(intent);
+                    getActivity().finish();
                 }
             }
         });
