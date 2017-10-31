@@ -35,7 +35,7 @@ public class CityAdapter extends RecyclerView.Adapter<CityAdapter.ViewHolder>{
         SaveCity saveCity = saveCities.get(position);
         holder.cityName.setText(saveCity.getCity());
         holder.cityQiHou.setText(saveCity.getWeatherTxt());
-        holder.cityWenDu.setText(saveCity.getWeather());
+        holder.cityWenDu.setText(String.valueOf(saveCity.getWeather()));
         holder.time.setText(saveCity.getTime());
     }
 
